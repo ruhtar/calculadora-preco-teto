@@ -56,7 +56,7 @@ function createEmptyRow(): Row {
     payout: "", //Payout: muda ~1 vez por ano (às vezes trimestral, mas anual é o padrão relevante)
     cagr: "", //CAGR: muda ~a cada 3–5 anos (é uma métrica de longo prazo)
     tempo: "3",
-    dy: "8", 
+    dy: "8",
     lpaFuturo: "-",
     dividendo: "-",
     precoTeto: "-",
@@ -64,11 +64,26 @@ function createEmptyRow(): Row {
   };
 }
 
+const COLUMN_KEYS: (keyof Row)[] = [
+  "ticker",
+  "preco",
+  "lpa",
+  "payout",
+  "cagr",
+  "dy",
+  "tempo",
+  "lpaFuturo",
+  "dividendo",
+  "precoTeto",
+  "margem"
+];
 
 export default function App() {
   const [rows, setRows] = useState<Row[]>(
     DEFAULT_TICKERS.map(createRowWithTicker)
   );
+  const [sortBy, setSortBy] = useState<keyof Row | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   async function fetchStockData(index: number, ticker: string) {
     if (!ticker) return;
@@ -157,6 +172,61 @@ export default function App() {
     setRows((prev) => [...prev, createEmptyRow()]);
   }
 
+  function handleSort(column: keyof Row) {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('asc');
+    }
+  }
+
+  function parseValue(value: string): number {
+    // Remove símbolos como % e espaços
+    const cleaned = value.replace(/%/g, '').trim();
+    return parseBR(cleaned);
+  }
+
+  function getSortedRows() {
+    if (!sortBy) return rows;
+
+    const sorted = [...rows].sort((a, b) => {
+      const aVal = a[sortBy];
+      const bVal = b[sortBy];
+
+      // Tenta converter para número
+      const aNum = parseValue(aVal);
+      const bNum = parseValue(bVal);
+
+      let comparison = 0;
+
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        comparison = aNum - bNum;
+      } else {
+        // Comparação como string
+        comparison = String(aVal).localeCompare(String(bVal));
+      }
+
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    return sorted;
+  }
+
+  const columnLabels: Record<keyof Row, string> = {
+    ticker: "Ticker da Ação",
+    preco: "Preço atual (R$)",
+    lpa: "LPA atual (R$)",
+    payout: "Payout médio (%)",
+    cagr: "CAGR Lucros médio (%)",
+    dy: "DY desejado (%)",
+    tempo: "Tempo da previsão (anos)",
+    lpaFuturo: "LPA Futuro (R$)",
+    dividendo: "Dividendo futuro (R$)",
+    precoTeto: "Preço Teto (R$)",
+    margem: "Margem de segurança (%)"
+  };
+
   return (
     <div className="container">
       <div>
@@ -170,35 +240,36 @@ export default function App() {
         <table>
           <thead>
             <tr>
-              {[
-                "Ticker da Ação",
-                "Preço atual (R$)",
-                "LPA atual (R$)",
-                "Payout médio (%)",
-                "CAGR Lucros médio (%)",
-                "DY desejado (%)",
-                "Tempo da previsão (anos)",
-                "LPA Futuro (R$)",
-                "Dividendo futuro (R$)",
-                "Preço Teto (R$)",
-                "Margem de segurança (%)"
-              ].map((h) => (
-                <th key={h}>{h}</th>
+              {COLUMN_KEYS.map((key) => (
+                <th key={key} className="sortable-header" onClick={() => handleSort(key)}>
+                  <span className="header-content">
+                    {columnLabels[key]}
+                    {sortBy === key && (
+                      <span className={`sort-indicator ${sortOrder}`}>
+                        {sortOrder === 'asc' ? ' ▲' : ' ▼'}
+                      </span>
+                    )}
+                  </span>
+                </th>
               ))}
             </tr>
           </thead>
 
           <tbody>
-            {rows.map((row, i) => (
+            {getSortedRows().map((row, i) => (
               <tr key={i}>
                 <td>
                   <input
                     type="text"
                     value={row.ticker}
-                    onChange={(e) =>
-                      updateRow(i, { ticker: e.target.value })
-                    }
-                    onBlur={() => fetchStockData(i, row.ticker)}
+                    onChange={(e) => {
+                      const originalIndex = rows.indexOf(row);
+                      updateRow(originalIndex, { ticker: e.target.value });
+                    }}
+                    onBlur={(e) => {
+                      const originalIndex = rows.indexOf(row);
+                      fetchStockData(originalIndex, e.target.value);
+                    }}
                   />
                 </td>
 
@@ -209,8 +280,9 @@ export default function App() {
                         type="text"
                         value={row[field]}
                         onChange={(e) => {
-                          updateRow(i, { [field]: e.target.value });
-                          calcular(i);
+                          const originalIndex = rows.indexOf(row);
+                          updateRow(originalIndex, { [field]: e.target.value });
+                          calcular(originalIndex);
                         }}
                       />
                     </td>

@@ -67,6 +67,28 @@ th {
   white-space: nowrap;
 }
 
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.sortable-header:hover {
+  background: linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%);
+}
+
+.header-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sort-indicator {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: bold;
+}
+
 td {
   padding: 10px 6px;
   text-align: center;
