@@ -159,77 +159,85 @@ export default function App() {
 
   return (
     <div className="container">
-      <h1 className="text-2xl font-bold text-center mb-6">
-        Calculadora de Preço Teto
-      </h1>
+      <div>
+        <h1>Calculadora de Preço Teto</h1>
+        <p className="subtitle">
+          Calcule o preço máximo que você deve pagar por uma ação com base em sua estratégia de dividendos
+        </p>
+      </div>
 
-      <table className="w-full border border-slate-700">
-        <thead className="bg-purple-600">
-          <tr>
-            {[
-              "Ticker da Ação",
-              "Preço atual (R$)",
-              "LPA atual (R$)",
-              "Payout médio (%)",
-              "CAGR Lucros médio (%)",
-              "DY desejado (%)",
-              "Tempo da previsão (anos)",
-              "LPA Futuro (R$)",
-              "Dividendo futuro (R$)",
-              "Preço Teto (R$)",
-              "Margem de segurança (%)"
-            ].map((h) => (
-              <th key={h} className="p-2 border">
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} className="text-center">
-              <td>
-                <input
-                  className="bg-black w-full"
-                  value={row.ticker}
-                  onChange={(e) =>
-                    updateRow(i, { ticker: e.target.value })
-                  }
-                  onBlur={() => fetchStockData(i, row.ticker)}
-                />
-              </td>
-
-              {(["preco", "lpa", "payout", "cagr", "dy", "tempo"] as (keyof Row)[]).map(
-                (field) => (
-                  <td key={field}>
-                    <input
-                      className="bg-black w-full"
-                      value={row[field]}
-                      onChange={(e) => {
-                        updateRow(i, { [field]: e.target.value });
-                        calcular(i);
-                      }}
-                    />
-                  </td>
-                )
-              )}
-
-              <td>{row.lpaFuturo}</td>
-              <td>{row.dividendo}</td>
-              <td>{row.precoTeto}</td>
-              <td className="text-green-400 font-bold">{row.margem}</td>
+      <div className="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              {[
+                "Ticker da Ação",
+                "Preço atual (R$)",
+                "LPA atual (R$)",
+                "Payout médio (%)",
+                "CAGR Lucros médio (%)",
+                "DY desejado (%)",
+                "Tempo da previsão (anos)",
+                "LPA Futuro (R$)",
+                "Dividendo futuro (R$)",
+                "Preço Teto (R$)",
+                "Margem de segurança (%)"
+              ].map((h) => (
+                <th key={h}>{h}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
 
-      <button
-        onClick={addRow}
-        className="mt-4 px-4 py-2 bg-green-500 text-black font-bold"
-      >
-        Adicionar Linha
-      </button>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i}>
+                <td>
+                  <input
+                    type="text"
+                    value={row.ticker}
+                    onChange={(e) =>
+                      updateRow(i, { ticker: e.target.value })
+                    }
+                    onBlur={() => fetchStockData(i, row.ticker)}
+                  />
+                </td>
+
+                {(["preco", "lpa", "payout", "cagr", "dy", "tempo"] as (keyof Row)[]).map(
+                  (field) => (
+                    <td key={field}>
+                      <input
+                        type="text"
+                        value={row[field]}
+                        onChange={(e) => {
+                          updateRow(i, { [field]: e.target.value });
+                          calcular(i);
+                        }}
+                      />
+                    </td>
+                  )
+                )}
+
+                <td>{row.lpaFuturo}</td>
+                <td>{row.dividendo}</td>
+                <td>{row.precoTeto}</td>
+                <td className={
+                  row.margem === "-"
+                    ? "margin-empty"
+                    : parseFloat(row.margem) >= 0
+                      ? "margin-positive"
+                      : "margin-negative"
+                }>
+                  {row.margem}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="button-container">
+        <button onClick={addRow}>+ Adicionar Linha</button>
+      </div>
     </div>
   );
 }
