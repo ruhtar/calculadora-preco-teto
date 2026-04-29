@@ -16,6 +16,20 @@ const DEFAULT_TICKERS = [
   "TAEE3"
 ];
 
+type Row = {
+  ticker: string;
+  preco: string;
+  lpa: string;
+  payout: string;
+  cagr: string;
+  dy: string;
+  tempo: string;
+  lpaFuturo: string;
+  dividendo: string;
+  precoTeto: string;
+  margem: string;
+};
+
 
 const STOCK_PRESETS: Record<string, { payout: string; cagr: string }> = {
   BBAS3: { payout: "37.45", cagr: "6.82" },
@@ -34,19 +48,148 @@ function createRowWithTicker(ticker: string): Row {
   };
 }
 
-type Row = {
-  ticker: string;
-  preco: string;
-  lpa: string;
-  payout: string;
-  cagr: string;
-  dy: string;
-  tempo: string;
-  lpaFuturo: string;
-  dividendo: string;
-  precoTeto: string;
-  margem: string;
+type WarningLevel = "warning" | "attention" | null;
+
+type WarningResult = {
+  cagr: WarningLevel;
+  payout: WarningLevel;
+  dy: WarningLevel;
+  tempo: WarningLevel;
+  lpa: WarningLevel;
+  margem: WarningLevel;
+  precoTetoRatio: WarningLevel;
+  precoTetoRatioMessage?: string;
 };
+
+function getFieldWarnings(row: Row): WarningResult {
+  const cagr = Number(row.cagr);
+  const payout = Number(row.payout);
+  const dy = Number(row.dy);
+  const tempo = Number(row.tempo);
+  const lpa = parseBR(row.lpa);
+  const margem = parseFloat(row.margem);
+  const preco = parseBR(row.preco);
+  const precoTeto = parseBR(row.precoTeto);
+
+  const warnings: WarningResult = {
+    cagr: null,
+    payout: null,
+    dy: null,
+    tempo: null,
+    lpa: null,
+    margem: null,
+    precoTetoRatio: null
+  };
+
+  // 1. CAGR Validation
+  if (!isNaN(cagr)) {
+    if (cagr > 25) warnings.cagr = "attention";
+    else if (cagr > 15) warnings.cagr = "attention";
+    else if (cagr > 10) warnings.cagr = "warning";
+  }
+
+  // 2. Payout Validation
+  if (!isNaN(payout)) {
+    if (payout > 100) warnings.payout = "attention";
+    else if (payout > 80) warnings.payout = "warning";
+    else if (payout < 30) warnings.payout = "warning";
+  }
+
+  // 3. DY Validation
+  if (!isNaN(dy)) {
+    if (dy < 4) warnings.dy = "attention";
+    else if (dy < 6) warnings.dy = "warning";
+    else if (dy > 12) warnings.dy = "warning";
+  }
+
+  // 4. Tempo Validation
+  if (!isNaN(tempo)) {
+    if (tempo > 10) warnings.tempo = "attention";
+    else if (tempo >= 6) warnings.tempo = "warning";
+    else if (tempo < 3) warnings.tempo = "warning";
+  }
+
+  // 5. LPA Validation
+  if (!isNaN(lpa) && lpa <= 0) {
+    warnings.lpa = "attention";
+  }
+
+  // 6. Margem Validation
+  if (!isNaN(margem) && row.margem !== "-") {
+    if (margem > 100) warnings.margem = "attention";
+    else if (margem > 50) warnings.margem = "warning";
+  }
+
+  // 7. Relação Preço Teto vs Preço Atual
+  if (!isNaN(preco) && !isNaN(precoTeto) && preco > 0) {
+    const ratio = precoTeto / preco;
+    if (!isNaN(ratio)) {
+      if (ratio > 3) {
+        warnings.precoTetoRatio = "attention";
+        warnings.precoTetoRatioMessage = `Preço teto é ${ratio.toFixed(1)}x o preço atual`;
+      } else if (ratio > 2) {
+        warnings.precoTetoRatio = "warning";
+        warnings.precoTetoRatioMessage = `Preço teto é ${ratio.toFixed(1)}x o preço atual`;
+      }
+    }
+  }
+
+  return warnings;
+}
+
+type WarningField = Exclude<keyof WarningResult, "precoTetoRatioMessage">;
+
+function getWarningTooltip(
+  field: WarningField,
+  warnings: WarningResult
+): string | null {
+    const messages: Record<
+      WarningField,
+      Partial<Record<Exclude<WarningLevel, null>, string>>
+    > = {
+    cagr: {
+      warning: "Crescimento otimista. Difícil sustentar esse ritmo a longo prazo",
+      attention: "Crescimento provavelmente irrealista. Verifique as premissas",
+    },
+    payout: {
+      warning: "Empresa distribui muita parte dos lucros. Menos reinvestimento",
+      attention: "Payout > 100%: modelo insustentável. Verifique os dados",
+    },
+    dy: {
+      warning: "DY baixo. Pode inflar preço teto",
+      attention: "DY muito baixo. Forte distorção no cálculo",
+    },
+    tempo: {
+      warning: "Horizonte longo aumenta incerteza",
+      attention: "Previsão muito longa. Alta chance de erro",
+    },
+    lpa: {
+      attention: "LPA negativo ou zero. Modelo perde validade",
+    },
+    margem: {
+      warning: "Margem alta pode indicar premissas otimistas",
+      attention: "Margem > 100%. Provável distorção",
+    },
+    precoTetoRatio: {
+      warning: "Preço teto 2–3x maior que o atual",
+      attention: "Preço teto muito acima (>3x). Revise premissas",
+    }
+  };
+
+  const level = warnings[field];
+
+  if (level !== "warning" && level !== "attention") {
+    return null;
+  }
+
+  return messages[field]?.[level] ?? null;
+}
+
+function getWarningClass(warningLevel: WarningLevel): string {
+  if (warningLevel === "attention") return "field-attention";
+  if (warningLevel === "warning") return "field-warning";
+  return "";
+}
 
 function createEmptyRow(): Row {
   return {
@@ -198,6 +341,7 @@ export default function App() {
       const aNum = parseValue(aVal);
       const bNum = parseValue(bVal);
 
+      // eslint-disable-next-line no-useless-assignment
       let comparison = 0;
 
       if (!isNaN(aNum) && !isNaN(bNum)) {
@@ -256,59 +400,274 @@ export default function App() {
           </thead>
 
           <tbody>
-            {getSortedRows().map((row, i) => (
-              <tr key={i}>
-                <td>
-                  <input
-                    type="text"
-                    value={row.ticker}
-                    onChange={(e) => {
-                      const originalIndex = rows.indexOf(row);
-                      updateRow(originalIndex, { ticker: e.target.value });
-                    }}
-                    onBlur={(e) => {
-                      const originalIndex = rows.indexOf(row);
-                      fetchStockData(originalIndex, e.target.value);
-                    }}
-                  />
-                </td>
+            {getSortedRows().map((row, i) => {
+              const warnings = getFieldWarnings(row);
+              return (
+                <tr key={i}>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.ticker}
+                      onChange={(e) => {
+                        const originalIndex = rows.indexOf(row);
+                        updateRow(originalIndex, { ticker: e.target.value });
+                      }}
+                      onBlur={(e) => {
+                        const originalIndex = rows.indexOf(row);
+                        fetchStockData(originalIndex, e.target.value);
+                      }}
+                    />
+                  </td>
 
-                {(["preco", "lpa", "payout", "cagr", "dy", "tempo"] as (keyof Row)[]).map(
-                  (field) => (
-                    <td key={field}>
+                  <td>
+                    <input
+                      type="text"
+                      value={row.preco}
+                      onChange={(e) => {
+                        const originalIndex = rows.indexOf(row);
+                        updateRow(originalIndex, { preco: e.target.value });
+                        calcular(originalIndex);
+                      }}
+                    />
+                  </td>
+
+                  <td>
+                    <div className={`input-wrapper ${getWarningClass(warnings.lpa)}`} data-tooltip={getWarningTooltip("lpa", warnings) || undefined}>
                       <input
                         type="text"
-                        value={row[field]}
+                        value={row.lpa}
                         onChange={(e) => {
                           const originalIndex = rows.indexOf(row);
-                          updateRow(originalIndex, { [field]: e.target.value });
+                          updateRow(originalIndex, { lpa: e.target.value });
                           calcular(originalIndex);
                         }}
                       />
-                    </td>
-                  )
-                )}
+                      {warnings.lpa && <span className="warning-icon">⚠️</span>}
+                    </div>
+                  </td>
 
-                <td>{row.lpaFuturo}</td>
-                <td>{row.dividendo}</td>
-                <td>{row.precoTeto}</td>
-                <td className={
-                  row.margem === "-"
-                    ? "margin-empty"
-                    : parseFloat(row.margem) >= 0
-                      ? "margin-positive"
-                      : "margin-negative"
-                }>
-                  {row.margem}
-                </td>
-              </tr>
-            ))}
+                  <td>
+                    <div className={`input-wrapper ${getWarningClass(warnings.payout)}`} data-tooltip={getWarningTooltip("payout", warnings) || undefined}>
+                      <input
+                        type="text"
+                        value={row.payout}
+                        onChange={(e) => {
+                          const originalIndex = rows.indexOf(row);
+                          updateRow(originalIndex, { payout: e.target.value });
+                          calcular(originalIndex);
+                        }}
+                      />
+                      {warnings.payout && <span className="warning-icon">⚠️</span>}
+                    </div>
+                  </td>
+
+                  <td>
+                    <div className={`input-wrapper ${getWarningClass(warnings.cagr)}`} data-tooltip={getWarningTooltip("cagr", warnings) || undefined}>
+                      <input
+                        type="text"
+                        value={row.cagr}
+                        onChange={(e) => {
+                          const originalIndex = rows.indexOf(row);
+                          updateRow(originalIndex, { cagr: e.target.value });
+                          calcular(originalIndex);
+                        }}
+                      />
+                      {warnings.cagr && <span className="warning-icon">⚠️</span>}
+                    </div>
+                  </td>
+
+                  <td>
+                    <div className={`input-wrapper ${getWarningClass(warnings.dy)}`} data-tooltip={getWarningTooltip("dy", warnings) || undefined}>
+                      <input
+                        type="text"
+                        value={row.dy}
+                        onChange={(e) => {
+                          const originalIndex = rows.indexOf(row);
+                          updateRow(originalIndex, { dy: e.target.value });
+                          calcular(originalIndex);
+                        }}
+                      />
+                      {warnings.dy && <span className="warning-icon">⚠️</span>}
+                    </div>
+                  </td>
+
+                  <td>
+                    <div className={`input-wrapper ${getWarningClass(warnings.tempo)}`} data-tooltip={getWarningTooltip("tempo", warnings) || undefined}>
+                      <input
+                        type="text"
+                        value={row.tempo}
+                        onChange={(e) => {
+                          const originalIndex = rows.indexOf(row);
+                          updateRow(originalIndex, { tempo: e.target.value });
+                          calcular(originalIndex);
+                        }}
+                      />
+                      {warnings.tempo && <span className="warning-icon">⚠️</span>}
+                    </div>
+                  </td>
+
+                  <td>{row.lpaFuturo}</td>
+                  <td>{row.dividendo}</td>
+
+                  <td>
+                    <div className={getWarningClass(warnings.precoTetoRatio)}>
+                      <span title={warnings.precoTetoRatioMessage || ""}>{row.precoTeto}</span>
+                      {warnings.precoTetoRatio && <span className="warning-icon">⚠️</span>}
+                    </div>
+                  </td>
+
+                  <td className={
+                    row.margem === "-"
+                      ? "margin-empty"
+                      : parseFloat(row.margem) >= 0
+                        ? "margin-positive"
+                        : "margin-negative"
+                  }>
+                    <div className={getWarningClass(warnings.margem)}>
+                      <span title={getWarningTooltip("margem", warnings) || ""}>{row.margem}</span>
+                      {warnings.margem && <span className="warning-icon">⚠️</span>}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       <div className="button-container">
         <button onClick={addRow}>+ Adicionar Linha</button>
+      </div>
+
+      <div className="glossary">
+        <h2>📚 Glossário de Campos</h2>
+        <div className="glossary-grid">
+
+          <div className="glossary-item">
+            <strong>Preço atual (R$)</strong>
+            <p>
+              Preço de negociação da ação no momento. 
+              <br />
+              ⚠️ Pode oscilar no curto prazo sem refletir valor real.
+            </p>
+          </div>
+
+          <div className="glossary-item">
+            <strong>LPA atual (R$)</strong>
+            <p>
+              Lucro por ação da empresa.
+              <br />
+              ✅ Ideal usar média de alguns anos.
+              <br />
+              ⚠️ Evite usar LPA de anos atípicos (lucro inflado ou prejuízo pontual).
+            </p>
+          </div>
+
+          <div className="glossary-item">
+            <strong>Payout médio (%)</strong>
+            <p>
+              Percentual do lucro distribuído como dividendos.
+              <br />
+              📊 Faixa comum: 40% – 80%
+              <br />
+              ⚠️ Acima de 100% pode indicar distribuição insustentável
+              <br />
+              💡 Empresas elétricas e seguradoras costumam ter payout mais alto
+            </p>
+          </div>
+
+          <div className="glossary-item">
+            <strong>CAGR Lucros médio (%)</strong>
+            <p>
+              Crescimento médio anual dos lucros.
+              <br />
+              📊 Conservador: 3% – 8%
+              <br />
+              📊 Moderado: 8% – 12%
+              <br />
+              ⚠️ Acima de 15% tende a ser difícil de sustentar no longo prazo
+              <br />
+              ❗ Valores muito altos inflacionam fortemente o preço teto
+            </p>
+          </div>
+
+          <div className="glossary-item">
+            <strong>DY desejado (%)</strong>
+            <p>
+              Retorno em dividendos que você exige.
+              <br />
+              📊 Comum: 6% – 10%
+              <br />
+              💡 Quanto maior o DY exigido → menor será o preço teto
+              <br />
+              ⚠️ DY muito baixo pode fazer você pagar caro na ação
+            </p>
+          </div>
+
+          <div className="glossary-item">
+            <strong>Tempo da previsão (anos)</strong>
+            <p>
+              Horizonte de projeção dos lucros.
+              <br />
+              📊 3 anos → conservador
+              <br />
+              📊 5 anos → equilibrado (recomendado)
+              <br />
+              ⚠️ Mais de 10 anos aumenta muito a incerteza
+              <br />
+              ❗ Tempo alto + CAGR alto = distorção forte
+            </p>
+          </div>
+
+          <div className="glossary-item">
+            <strong>LPA Futuro (R$)</strong>
+            <p>
+              Lucro projetado com base no CAGR.
+              <br />
+              ⚠️ Cresce exponencialmente com o tempo
+              <br />
+              ❗ Sensível a erros no CAGR
+            </p>
+          </div>
+
+          <div className="glossary-item">
+            <strong>Dividendo futuro (R$)</strong>
+            <p>
+              Estimativa de dividendos por ação.
+              <br />
+              💡 Depende diretamente do payout
+              <br />
+              ⚠️ Pode ser instável em empresas cíclicas
+            </p>
+          </div>
+
+          <div className="glossary-item">
+            <strong>Preço Teto (R$)</strong>
+            <p>
+              Valor máximo que você deveria pagar pela ação.
+              <br />
+              💡 Baseado no retorno desejado (DY)
+              <br />
+              ⚠️ Altamente sensível ao CAGR e payout
+              <br />
+              ❗ Pode inflar facilmente com premissas otimistas
+            </p>
+          </div>
+
+          <div className="glossary-item">
+            <strong>Margem de segurança (%)</strong>
+            <p>
+              Diferença entre o preço atual e o preço teto.
+              <br />
+              📊 Positivo → potencial oportunidade
+              <br />
+              📊 Negativo → ação pode estar cara
+              <br />
+              ⚠️ Não garante lucro, apenas indica desconto teórico
+            </p>
+          </div>
+
+        </div>
       </div>
     </div>
   );
