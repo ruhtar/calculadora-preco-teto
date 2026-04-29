@@ -168,10 +168,10 @@ export default function App() {
           <tr>
             {[
               "Ticker da Ação",
-              "Preço atual",
-              "LPA atual",
-              "Payout (%)",
-              "CAGR Lucros (%)",
+              "Preço atual (R$)",
+              "LPA atual (R$)",
+              "Payout médio (%)",
+              "CAGR Lucros médio (%)",
               "DY desejado (%)",
               "Tempo da previsão (anos)",
               "LPA Futuro (R$)",
