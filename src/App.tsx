@@ -510,24 +510,34 @@ export default function App() {
                   <td>{row.dividendo}</td>
 
                   <td>
-                    <div className={getWarningClass(warnings.precoTetoRatio)}>
-                      <span title={warnings.precoTetoRatioMessage || ""}>{row.precoTeto}</span>
+                    <div
+                      className={`input-wrapper ${getWarningClass(warnings.precoTetoRatio)}`}
+                      data-tooltip={getWarningTooltip("precoTetoRatio", warnings) || undefined}
+                    >
+
+                      <span>{row.precoTeto}</span>
+
                       {warnings.precoTetoRatio && <span className="warning-icon">⚠️</span>}
                     </div>
                   </td>
 
-                  <td className={
+                <td
+                  className={
                     row.margem === "-"
                       ? "margin-empty"
                       : parseFloat(row.margem) >= 0
                         ? "margin-positive"
                         : "margin-negative"
-                  }>
-                    <div className={getWarningClass(warnings.margem)}>
-                      <span title={getWarningTooltip("margem", warnings) || ""}>{row.margem}</span>
-                      {warnings.margem && <span className="warning-icon">⚠️</span>}
-                    </div>
-                  </td>
+                  }
+                >
+                  <div
+                    className={`input-wrapper ${getWarningClass(warnings.margem)}`}
+                    data-tooltip={getWarningTooltip("margem", warnings) || undefined}
+                  >
+                    <span>{row.margem}</span>
+                    {warnings.margem && <span className="warning-icon">⚠️</span>}
+                  </div>
+                </td>
                 </tr>
               );
             })}
